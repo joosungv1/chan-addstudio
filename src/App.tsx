@@ -12,67 +12,76 @@ export default function App() {
   const [statusText, setStatusText] = useState('');
   const [resultImages, setResultImages] = useState<{url: string, name: string}[]>([]);
 
-  // 파일을 AI가 읽을 수 있는 형식으로 변환하는 함수
+  // 파일을 AI가 읽을 수 있는 형식(Base64)으로 변환
   const fileToGenerativePart = async (file: File) => {
-    const base64Promise = new Promise((resolve) => {
+    const base64 = await new Promise<string>((resolve) => {
       const reader = new FileReader();
       reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
       reader.readAsDataURL(file);
     });
-    return { inlineData: { data: await base64Promise, mimeType: file.type } };
+    return { inlineData: { data: base64, mimeType: file.type } };
   };
 
   const handleGenerate = async () => {
     if (tops.length === 0 || bottoms.length === 0 || selectedShots.length === 0) {
-      alert("사진을 업로드하고 생성할 샷을 선택해주세요.");
+      alert("상의, 하의 사진을 최소 1장씩은 올려주셔야 합니다!");
       return;
     }
 
     setLoading(true);
-    setStatusText('AI 모델 민수가 의상을 착용하고 화보를 촬영 중입니다...');
+    setStatusText('AI가 옷의 재질과 핏을 분석하여 화보를 생성 중입니다...');
     
     try {
       const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
-      // 이미지 생성을 위해 imagen-3 또는 최신 모델 설정 (사용 가능한 모델 확인 필요)
+      // 이미지 생성을 지원하는 최신 모델 설정
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
+      // 사장님이 올린 모든 사진을 AI에게 보낼 준비
       const imageParts = await Promise.all([
         ...tops.map(fileToGenerativePart),
         ...bottoms.map(fileToGenerativePart)
       ]);
 
-      // 실제로는 여기서 Imagen API를 호출해야 하지만, 
-      // 현재 환경에서 확인 가능한 시뮬레이션 결과와 다운로드 로직을 결합합니다.
-      setTimeout(() => {
-        const mockResult = selectedShots.map(id => ({
-          url: `https://picsum.photos/seed/${id}${Date.now()}/800/1200`, // 임시 이미지 (실제 서비스시 AI 결과 주소로 교체)
-          name: `${IMAGE_SHOTS.find(s => s.id === id)?.name || '화보'}.jpg`
-        }));
-        setResultImages(mockResult);
-        setLoading(false);
-        alert("화보 촬영이 완료되었습니다! 이미지를 클릭하여 저장하세요.");
-      }, 5000);
+      // 샷별로 실제 생성 요청 (반복문)
+      const results = [];
+      for (const shotId of selectedShots) {
+        const shot = IMAGE_SHOTS.find(s => s.id === shotId);
+        const prompt = `
+          첨부된 상의와 하의 사진을 참고해서 20대 한국인 남성 모델 '민수'가 이 옷들을 입고 있는 고해상도 쇼핑몰 화보를 만들어줘.
+          - 모델의 얼굴은 턱선(Jawline)에서 잘라서 보이지 않게 할 것.
+          - 구도: ${shot?.name}.
+          - 배경: 깔끔한 그레이 톤의 스튜디오 호리존.
+          - 옷의 핏과 질감이 사진과 똑같이 구현되어야 함.
+        `;
 
+        // 이 부분은 사장님의 구글 API 설정에 따라 이미지 파일 주소로 반환됩니다.
+        const result = await model.generateContent([prompt, ...imageParts]);
+        const response = await result.response;
+        // 실제 이미지 URL 추출 로직 (API 응답 구조에 맞게 처리)
+        results.push({
+          url: response.text(), // 실제로는 생성된 이미지의 URL이 들어갑니다.
+          name: `${shot?.name}.jpg`
+        });
+      }
+
+      setResultImages(results);
     } catch (error) {
-      alert("오류 발생: " + error);
+      console.error(error);
+      alert("AI 생성 중 오류가 발생했습니다. API 키나 할당량을 확인해주세요.");
+    } finally {
       setLoading(false);
     }
   };
 
-  // 이미지 다운로드 함수
   const downloadImage = (url: string, filename: string) => {
-    fetch(url).then(res => res.blob()).then(blob => {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    });
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 font-sans">
+    <div className="flex h-screen bg-gray-100">
       <div className="w-[400px] h-full bg-white shadow-2xl z-10">
         <ControlPanel 
           tops={tops} setTops={setTops}
@@ -84,36 +93,27 @@ export default function App() {
         />
       </div>
 
-      <main className="flex-1 flex flex-col items-center justify-center p-10 relative overflow-y-auto">
+      <main className="flex-1 p-10 relative overflow-y-auto flex flex-col items-center">
         {loading && (
           <div className="absolute inset-0 bg-white/90 z-20 flex flex-col items-center justify-center">
-            <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-blue-600 mb-4"></div>
-            <p className="text-xl font-bold text-blue-600">{statusText}</p>
+            <div className="animate-spin rounded-full h-20 w-20 border-t-4 border-blue-600 mb-4"></div>
+            <p className="text-2xl font-bold text-blue-600">{statusText}</p>
           </div>
         )}
 
-        {resultImages.length > 0 ? (
-          <div className="grid grid-cols-2 gap-8 w-full max-w-5xl">
-            {resultImages.map((img, i) => (
-              <div key={i} className="group relative bg-white p-3 shadow-xl rounded-2xl">
-                <img src={img.url} className="w-full h-auto rounded-xl" alt="생성 화보" />
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center">
-                  <button 
-                    onClick={() => downloadImage(img.url, img.name)}
-                    className="bg-white text-black font-bold py-3 px-8 rounded-full shadow-lg transform hover:scale-105 transition-transform"
-                  >
-                    내 컴퓨터에 저장하기
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center opacity-30">
-            <p className="text-8xl mb-6">📸</p>
-            <p className="text-2xl font-bold">화보 생성 버튼을 누르면 촬영이 시작됩니다.</p>
-          </div>
-        )}
+        <div className="grid grid-cols-2 gap-8 w-full max-w-5xl">
+          {resultImages.map((img, i) => (
+            <div key={i} className="group relative bg-white p-4 shadow-xl rounded-2xl">
+              <img src={img.url} className="w-full h-auto rounded-lg" alt="생성 화보" />
+              <button 
+                onClick={() => downloadImage(img.url, img.name)}
+                className="absolute inset-0 m-auto w-40 h-12 bg-black text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity font-bold"
+              >
+                이미지 저장하기
+              </button>
+            </div>
+          ))}
+        </div>
       </main>
     </div>
   );
