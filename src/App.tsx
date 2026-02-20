@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ControlPanel } from './components/ControlPanel';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { IMAGE_SHOTS } from './constants';
 
 declare global {
@@ -244,3 +244,4 @@ Strictly adhere to the following constraints:
     </div>
   );
 }
+
