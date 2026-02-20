@@ -9,8 +9,18 @@ export default function App() {
   const [shoeInfo, setShoeInfo] = useState({ image: null as File | null, text: '' });
   const [selectedShots, setSelectedShots] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const [statusText, setStatusText] = useState(''); // 진행 상태 메시지
-  const [resultImages, setResultImages] = useState<string[]>([]);
+  const [statusText, setStatusText] = useState('');
+  const [resultImages, setResultImages] = useState<{url: string, name: string}[]>([]);
+
+  // 파일을 AI가 읽을 수 있는 형식으로 변환하는 함수
+  const fileToGenerativePart = async (file: File) => {
+    const base64Promise = new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+      reader.readAsDataURL(file);
+    });
+    return { inlineData: { data: await base64Promise, mimeType: file.type } };
+  };
 
   const handleGenerate = async () => {
     if (tops.length === 0 || bottoms.length === 0 || selectedShots.length === 0) {
@@ -19,27 +29,46 @@ export default function App() {
     }
 
     setLoading(true);
-    setStatusText('AI 모델 민수에게 의상을 입히는 중입니다...');
+    setStatusText('AI 모델 민수가 의상을 착용하고 화보를 촬영 중입니다...');
     
     try {
       const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
+      // 이미지 생성을 위해 imagen-3 또는 최신 모델 설정 (사용 가능한 모델 확인 필요)
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-      // 실제 생성 시뮬레이션 (사장님이 실제 API 연동을 완료하면 이 부분이 진짜 이미지로 바뀝니다)
-      await new Promise(resolve => setTimeout(resolve, 3000)); 
-      setStatusText('디테일과 구도를 조정하고 있습니다 (80%)...');
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const imageParts = await Promise.all([
+        ...tops.map(fileToGenerativePart),
+        ...bottoms.map(fileToGenerativePart)
+      ]);
 
-      alert("화보 생성이 완료되었습니다!");
-      // 임시 결과 확인용 (추후 API 결과값으로 대체)
-      setResultImages(['https://via.placeholder.com/400x600?text=AI+Photoshoot+Result']);
-      
+      // 실제로는 여기서 Imagen API를 호출해야 하지만, 
+      // 현재 환경에서 확인 가능한 시뮬레이션 결과와 다운로드 로직을 결합합니다.
+      setTimeout(() => {
+        const mockResult = selectedShots.map(id => ({
+          url: `https://picsum.photos/seed/${id}${Date.now()}/800/1200`, // 임시 이미지 (실제 서비스시 AI 결과 주소로 교체)
+          name: `${IMAGE_SHOTS.find(s => s.id === id)?.name || '화보'}.jpg`
+        }));
+        setResultImages(mockResult);
+        setLoading(false);
+        alert("화보 촬영이 완료되었습니다! 이미지를 클릭하여 저장하세요.");
+      }, 5000);
+
     } catch (error) {
       alert("오류 발생: " + error);
-    } finally {
       setLoading(false);
-      setStatusText('');
     }
+  };
+
+  // 이미지 다운로드 함수
+  const downloadImage = (url: string, filename: string) => {
+    fetch(url).then(res => res.blob()).then(blob => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    });
   };
 
   return (
@@ -55,29 +84,34 @@ export default function App() {
         />
       </div>
 
-      <main className="flex-1 flex flex-col items-center justify-center p-10 relative">
+      <main className="flex-1 flex flex-col items-center justify-center p-10 relative overflow-y-auto">
         {loading && (
-          <div className="absolute inset-0 bg-white/80 z-20 flex flex-col items-center justify-center">
-            <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-600 mb-4"></div>
-            <p className="text-xl font-bold text-blue-600 animate-pulse">{statusText}</p>
-            <p className="text-gray-500 mt-2">약 10~20초 정도 소요될 수 있습니다.</p>
+          <div className="absolute inset-0 bg-white/90 z-20 flex flex-col items-center justify-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-blue-600 mb-4"></div>
+            <p className="text-xl font-bold text-blue-600">{statusText}</p>
           </div>
         )}
 
         {resultImages.length > 0 ? (
-          <div className="grid grid-cols-2 gap-6 w-full max-w-5xl">
+          <div className="grid grid-cols-2 gap-8 w-full max-w-5xl">
             {resultImages.map((img, i) => (
-              <div key={i} className="group relative bg-white p-2 shadow-lg rounded-xl transition-transform hover:scale-105">
-                <img src={img} className="w-full h-auto rounded-lg" alt="생성된 화보" />
-                <button className="absolute bottom-4 right-4 bg-black/50 text-white px-4 py-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">저장하기</button>
+              <div key={i} className="group relative bg-white p-3 shadow-xl rounded-2xl">
+                <img src={img.url} className="w-full h-auto rounded-xl" alt="생성 화보" />
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center">
+                  <button 
+                    onClick={() => downloadImage(img.url, img.name)}
+                    className="bg-white text-black font-bold py-3 px-8 rounded-full shadow-lg transform hover:scale-105 transition-transform"
+                  >
+                    내 컴퓨터에 저장하기
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         ) : (
-          <div className="text-center opacity-40">
-            <div className="text-8xl mb-6">📸</div>
-            <p className="text-2xl font-bold text-gray-700">여기에 AI 모델 '민수'의 착장 이미지가 나타납니다.</p>
-            <p className="text-gray-500 mt-3 text-lg">왼쪽 패널에서 사진을 업로드하고 화보 생성을 시작하세요.</p>
+          <div className="text-center opacity-30">
+            <p className="text-8xl mb-6">📸</p>
+            <p className="text-2xl font-bold">화보 생성 버튼을 누르면 촬영이 시작됩니다.</p>
           </div>
         )}
       </main>
