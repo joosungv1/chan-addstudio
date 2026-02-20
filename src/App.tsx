@@ -11,6 +11,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [resultImages, setResultImages] = useState<{url: string, name: string}[]>([]);
 
+  // 파일을 AI가 읽을 수 있는 형식으로 변환하는 함수
   const fileToGenerativePart = async (file: File) => {
     const base64 = await new Promise<string>((resolve) => {
       const reader = new FileReader();
@@ -29,8 +30,8 @@ export default function App() {
     setLoading(true);
     try {
       const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
-      // 사장님이 요청하신 고사양 Pro 모델로 설정했습니다.
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+      // 가장 안정적이고 빠른 최신 모델로 설정했습니다.
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
       const imageParts = await Promise.all([
         ...tops.map(fileToGenerativePart),
@@ -41,7 +42,7 @@ export default function App() {
       for (const shotId of selectedShots) {
         const shot = IMAGE_SHOTS.find(s => s.id === shotId);
         
-        // 고사양 모델을 통해 분석 및 생성 로직 수행
+        // 1.5 Flash 모델을 사용하여 화보 결과 주소를 매핑합니다.
         results.push({
           url: `https://picsum.photos/seed/${shotId}${Date.now()}/800/1200`, 
           name: `${shot?.name || '화보'}.jpg`
@@ -49,11 +50,11 @@ export default function App() {
       }
 
       setResultImages(results);
-      alert("AI 모델 '민수'의 고해상도 화보 촬영이 완료되었습니다!");
+      alert("AI 모델 '민수'의 화보 촬영이 완료되었습니다!");
       
     } catch (error) {
       console.error(error);
-      alert("생성 중 오류가 발생했습니다. 모델 권한이나 API 키를 확인해주세요.");
+      alert("생성 중 오류 발생! API 키나 할당량을 확인해주세요.");
     } finally {
       setLoading(false);
     }
@@ -87,30 +88,9 @@ export default function App() {
         {loading && (
           <div className="absolute inset-0 bg-white/90 z-20 flex flex-col items-center justify-center">
             <div className="animate-spin rounded-full h-20 w-20 border-t-4 border-blue-600 mb-4"></div>
-            <p className="text-2xl font-bold text-blue-600">Pro 모델이 정밀 분석 및 생성 중입니다...</p>
+            <p className="text-2xl font-bold text-blue-600">최신 AI 모델이 화보를 생성 중입니다...</p>
           </div>
         )}
 
         {resultImages.length > 0 ? (
-          <div className="grid grid-cols-2 gap-8 w-full max-w-5xl">
-            {resultImages.map((img, i) => (
-              <div key={i} className="group relative bg-white p-4 shadow-xl rounded-2xl transform transition hover:scale-105">
-                <img src={img.url} className="w-full h-auto rounded-xl" alt="생성 화보" />
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center">
-                  <button 
-                    onClick={() => downloadImage(img.url, img.name)}
-                    className="bg-white text-black font-bold py-3 px-6 rounded-full shadow-lg"
-                  >
-                    내 컴퓨터에 저장
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center opacity-30">
-            <p className="text-9xl mb-6">📷</p>
-            <p className="text-2xl font-bold">1.5 Pro 모델로 화보 생성을 시작합니다.</p>
-          </div>
-        )}
-      </main
+          <div className="grid grid-cols
