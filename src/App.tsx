@@ -34,7 +34,7 @@ export default function App() {
     try {
       const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
       // 이미지 생성을 지원하는 최신 모델 설정
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
 
       // 사장님이 올린 모든 사진을 AI에게 보낼 준비
       const imageParts = await Promise.all([
@@ -118,3 +118,4 @@ export default function App() {
     </div>
   );
 }
+
